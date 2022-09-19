@@ -1,53 +1,72 @@
-const express = require('express');
+require("dotenv-safe").config();
 const jwt = require('jsonwebtoken');
-const { expressjwt: expressJWT} = require('express-jwt')
+var { expressjwt: expressJWT } = require("express-jwt");
 const cors = require('cors');
-const cookieParse = require('cookie-parse');
+
+var cookieParser = require('cookie-parser')
+
+const express = require('express');
+const { usuario } = require('./models');
 
 const app = express();
 
 app.set('view engine', 'ejs');
+
+app.use(cors());
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true}));
 app.use(express.static('public'));
-app use(cors());
-app.use(cookieParse());
 
-app.get('/', async function(req, res){
-    res.send("Ola")
+app.use(cookieParser());
+app.use(
+  expressJWT({
+    secret: process.env.SECRET,
+    algorithms: ["HS256"],
+    getToken: req => req.cookies.token
+  }).unless({ path: ["/autenticar", "/logar", "/deslogar"] })
+);
+
+app.get('/autenticar', async function(req, res){
+  res.render('autenticar');
 })
 
-app.get('/autenticar', async function(req, res, next){
-    res.render("autenticar")
-});
+app.get('/', async function(req, res){
+  res.render("home")
+})
 
-app.post('/logar', function(req, res){
- const usuario = req.body.usuario;
- const senha = req.body.senha;
- if (usuario == "junin" && senha =="000"){
-req.send("autenticado")
-} else{
-  req.send("não autenticado")
-}
-});
+app.post('/logar', (req, res) => {
+  if(req.body.user === 'junin' && req.body.password === '123'){
+    const id = 1;
+    const token = jwt.sign({ id }, process.env.SECRET, {
+      expiresIn: 3600 // expires in 1hour
+    });
 
-app.get('/inscrever', async function(req, res, next){
-  res.render("inscrever")
-});
+    res.cookie('token', token, { httpOnly: true });
+    return res.json({ auth: true, token: token });
+  }
 
+  res.status(500).json({message: 'Login inválido!'});
+})
 
+app.post('/deslogar', function(req, res) {
+  res.cookie('token', null, { httpOnly: true });
+  res.json({deslogado: true})
+})
 
- 
+app.get('/cadastrar', async function(req, res){
+  res.render('cadastrar');
+})
 
+app.post('/cadastrar', async function(req, res){
+  const usuario_ = await usuario.create(req.body)
+  res.json(usuario_)
+})
 
-// if(numero > 0){
-//   console.log(numero);
-// } 
-
-// app.get('/', async function(req, res){
-//   var resultado = await usuario.findAll();
-//   res.json(resultado);
-// })
+app.get('/usuarios', async function(req, res){
+  const usuarios = await usuario.findAll();
+  res.json(usuarios);
+})
 
 app.listen(3000, function() {
   console.log('App de Exemplo escutando na porta 3000!')
